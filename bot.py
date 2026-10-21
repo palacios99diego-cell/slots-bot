@@ -1,10 +1,20 @@
-import json, os, re
+import json, os, re, threading
 from datetime import datetime
+from flask import Flask
 from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 
 TOKEN = os.environ.get("BOT_TOKEN")
 ARCHIVO = "apuestas.json"
+
+# Servidor web para que Render no falle
+app_flask = Flask(__name__)
+@app_flask.route('/')
+def home(): return "Bot slots-bot funcionando! V18 Activo"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app_flask.run(host='0.0.0.0', port=port)
 
 def cargar():
     if os.path.exists(ARCHIVO):
@@ -67,6 +77,7 @@ async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.edit_message_text(f"{'🟢' if acc=='win' else '🔴' if acc=='lose' else '🟡'} {datos[idx]['tipster']} ${datos[idx]['monto']} -> {datos[idx]['resultado']}")
 
 def main():
+    threading.Thread(target=run_flask, daemon=True).start()
     app=Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(callback))
