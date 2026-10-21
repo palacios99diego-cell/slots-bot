@@ -1,31 +1,95 @@
-import os
-import threading
+import json, os, re, threading
+from datetime import datetime
 from flask import Flask
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram import Update, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.environ.get("BOT_TOKEN")
+ARCHIVO = "apuestas.json"
 
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Bot Live!"
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("¡Bot de Slots activo! 🎰")
+app_flask = Flask(__name__)
+@app_flask.route('/')
+def home(): return "Bot V18 Activo"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    app_flask.run(host='0.0.0.0', port=port)
 
-def run_bot():
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
-    application.add_handler(CommandHandler("start", start))
-    # AQUI AGREGA TUS OTROS HANDLERS DE SLOTS
-    application.run_polling()
+def cargar():
+    if os.path.exists(ARCHIVO):
+        try:
+            with open(ARCHIVO, "r") as f: return json.load(f)
+        except: pass
+    return []
 
-if __name__ == '__main__':
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.start()
-    run_bot()
+def guardar(datos):
+    with open(ARCHIVO, "w") as f: json.dump(datos, f, indent=2)
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.clear()
+    teclado = [["📊 BALANCE","🔴 LISTADO ROJOS"]]
+    await update.message.reply_text("✅ V18 VIVO - Manda el partido y te respondo al tiro", reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True))
+
+async def mensaje(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    texto = (update.message.text or "").strip()
+    datos = cargar()
+    
+    if "BALANCE" in texto:
+        await update.message.reply_text(f"💰 Balance: {len(datos)} apuestas"); return
+    if "LISTADO ROJOS" in texto:
+        await update.message.reply_text("🔴 Listado: revisando..."); return
+        
+    es_numero = bool(re.match(r"^\d+(\.\d+)?$", texto))
+    
+    if context.user_data.get("esperando_tipster"):
+        tipster = texto
+        monto = context.user_data.get("monto")
+        pick = context.user_data.get("pick")
+        nuevo = {"fecha": datetime.now().strftime("%d/%m %H:%M"), "tipster": tipster, "monto": monto, "pick": pick, "resultado": "PENDIENTE"}
+        datos.append(nuevo); guardar(datos)
+        idx = len(datos)-1
+        context.user_data.clear()
+        botones = [[InlineKeyboardButton("🟢 VERDE", callback_data=f"win_{idx}"), InlineKeyboardButton("🔴 ROJO", callback_data=f"lose_{idx}")],[InlineKeyboardButton("🟡 NULO", callback_data=f"nulo_{idx}")]]
+        await update.message.reply_text(f"✅ GUARDADA\n👤 {tipster}\n💰 ${monto}\n📌 {pick}", reply_markup=InlineKeyboardMarkup(botones))
+        return
+
+    if context.user_data.get("esperando_monto"):
+        if es_numero:
+            context.user_data["monto"] = float(texto)
+            context.user_data["esperando_monto"] = False
+            context.user_data["esperando_tipster"] = True
+            await update.message.reply_text(f"💰 ${texto} OK, ahora el TIPSTER")
+            return
+        else:
+            await update.message.reply_text(f"❌ No es monto. Manda solo el número, ej: 70")
+            return
+
+    if not es_numero and len(texto) > 2:
+        context.user_data["pick"] = texto[:200]
+        context.user_data["esperando_monto"] = True
+        await update.message.reply_text(f"📌 Pick: {texto[:80]}\n\nAhora manda el MONTO (70)")
+        return
+
+    await update.message.reply_text(f"Recibido: {texto}")
+
+async def callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q=update.callback_query; await q.answer()
+    datos=cargar()
+    acc, idx = q.data.split("_"); idx=int(idx)
+    if acc=="win": datos[idx]["resultado"]="VERDE"
+    elif acc=="lose": datos[idx]["resultado"]="ROJO"
+    elif acc=="nulo": datos[idx]["resultado"]="NULO"
+    guardar(datos)
+    await q.edit_message_text(f"{'🟢' if acc=='win' else '🔴' if acc=='lose' else '🟡'} {datos[idx]['tipster']} ${datos[idx]['monto']} -> {datos[idx]['resultado']}")
+
+def main():
+    threading.Thread(target=run_flask, daemon=True).start()
+    app=Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(callback))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, mensaje))
+    print("V18 INICIADO")
+    app.run_polling()
+
+if __name__=="__main__":
+    main()
