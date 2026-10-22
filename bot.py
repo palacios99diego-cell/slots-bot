@@ -90,7 +90,7 @@ def main():
     )
     app.add_handler(conv)
     app.add_handler(CallbackQueryHandler(botones))
-    app.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
