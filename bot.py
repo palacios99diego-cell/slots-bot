@@ -12,7 +12,7 @@ app_web = Flask(__name__)
 
 @app_web.route("/")
 def home():
-    return "V22 FINAL OK"
+    return "V23 PENDIENTE ALERT OK"
 
 def cargar():
     if os.path.exists(ARCHIVO):
@@ -84,7 +84,7 @@ async def verificar_alertas(context, tipster):
     if not cid:
         return
     if racha >= 5:
-        texto = "🚨 ALERTA %d ROJAS SEGUIDAS 🚨\n\n👤 TIPSTER: %s\n🔴 Lleva %d perdidas al hilo\n\n⚠️ NO APOSTAR - SIGUE EN RACHA" % (racha, tipster, racha)
+        texto = "🚨 ALERTA %d ROJAS SEGUIDAS 🚨\n\n👤 TIPSTER: %s\n🔴 Lleva %d perdidas" % (racha, tipster, racha)
         await context.bot.send_message(chat_id=cid, text=texto)
 
 async def start(update, context):
@@ -92,7 +92,7 @@ async def start(update, context):
     context.user_data["chat_id"] = update.effective_chat.id
     save_chat(update.effective_chat.id)
     teclado = [["📊 BALANCE","⏳ PENDIENTES"],["👥 TIPSTERS 7","📋 LISTADO"]]
-    await update.message.reply_text("✅ V22 FINAL ACTIVO\nPick -> Monto -> Tipster", reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True))
+    await update.message.reply_text("✅ V23 FINAL ACTIVO", reply_markup=ReplyKeyboardMarkup(teclado, resize_keyboard=True))
 
 async def tipsters_cmd(update, context):
     context.user_data["chat_id"] = update.effective_chat.id
@@ -104,7 +104,6 @@ async def tipsters_cmd(update, context):
     agrupado = defaultdict(list)
     for x in datos:
         agrupado[x.get("tipster","?")].append(x)
-
     txt = "📋 Listado con últimos 7:\n\n"
     i = 1
     for tipster, lista in agrupado.items():
@@ -112,8 +111,6 @@ async def tipsters_cmd(update, context):
         emojis = ultimos_7_emojis(lista)
         if racha >= 5:
             txt += "%d. 🔴🔴 %s 🔴🔴\n%s\n➡️ %d ROJAS SEGUIDAS 🚨\n\n" % (i, tipster.upper(), emojis, racha)
-        elif racha >= 3:
-            txt += "%d. 👤 %s\n%s\n➡️ Racha roja: %d\n\n" % (i, tipster, emojis, racha)
         else:
             txt += "%d. 👤 %s\n%s\n➡️ Racha roja: %d\n\n" % (i, tipster, emojis, racha)
         i += 1
@@ -165,6 +162,12 @@ async def mensaje(update, context):
         tipster = texto[:50]
         monto = context.user_data.get("monto")
         pick = context.user_data.get("pick")
+
+        # ALERTA SI YA TIENE PENDIENTE DEL MISMO TIPSTER
+        pendientes_mismo = [x for x in datos if x.get("tipster","").lower() == tipster.lower() and x.get("resultado") == "PENDIENTE"]
+        if pendientes_mismo:
+            await update.message.reply_text("⚠️ YA TIENES %d PENDIENTE(S) DE 👤 %s\n%s\n\nRegistrando otra más..." % (len(pendientes_mismo), tipster, pendientes_mismo[-1].get("pick","")[:80]))
+
         nuevo = {"fecha":datetime.now().strftime("%d/%m %H:%M"), "tipster":tipster, "monto":monto, "pick":pick, "resultado":"PENDIENTE"}
         datos.append(nuevo)
         guardar(datos)
@@ -179,7 +182,7 @@ async def mensaje(update, context):
             context.user_data["monto"] = monto
             context.user_data["esperando_monto"] = False
             context.user_data["esperando_tipster"] = True
-            await update.message.reply_text("💰 $%s OK - Ahora manda TIPSTER:" % str(monto))
+            await update.message.reply_text("💰 $%s OK - Ahora TIPSTER:" % str(monto))
             return
         return
 
@@ -188,7 +191,7 @@ async def mensaje(update, context):
             return
         context.user_data["pick"] = texto[:500]
         context.user_data["esperando_monto"] = True
-        await update.message.reply_text("📌 Pick: %s\n\nAhora manda MONTO:" % texto[:120])
+        await update.message.reply_text("📌 Pick OK, manda MONTO:")
         return
 
 async def callback(update, context):
@@ -222,7 +225,7 @@ def build_app():
     return app
 
 def main():
-    print("V22 FINAL INICIADO", flush=True)
+    print("V23 INICIADO", flush=True)
     try:
         loop = asyncio.get_event_loop()
     except:
